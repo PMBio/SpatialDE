@@ -41,6 +41,10 @@ def lower_tril(mat):
         return t3f.TensorTrain(cores, tt_ranks=[1] * (len(cores) + 1))
 
 
+def softplus_inverse(x):
+    return tf.math.log(tf.math.exp(x) - 1.0)
+
+
 class PoissonTTSVGPR:
     def __init__(self, X, Y, n_inducers=10):  # TODO: at least 5 inducers
         self.X = X
@@ -451,21 +455,15 @@ class PoissonSVGPR:
         self.X = tf.constant(X)
         self.Y = tf.cast(tf.constant(Y), self.X.dtype)
 
-        self._len = tf.Variable(1.0, dtype=X.dtype)
-        self._sigma = tf.Variable(1.0, dtype=X.dtype)
-        self.u = tf.Variable(1.0, dtype=X.dtype)
-
         self.n_inducers_per_dim = n_inducers
         self.n_inducers = n_inducers ** X.shape[1]
         self.data_minrange, self.data_maxrange = (
-            tf.math.reduce_min(X, axis=0, keepdims=True),
-            tf.math.reduce_max(X, axis=0, keepdims=True),
+            tf.math.reduce_min(X, axis=0),
+            tf.math.reduce_max(X, axis=0),
         )
         self.inducers_grid = [
             tf.linspace(
-                self.data_minrange[0, i],
-                self.data_maxrange[0, i],
-                self.n_inducers_per_dim,
+                self.data_minrange[i], self.data_maxrange[i], self.n_inducers_per_dim,
             )
             for i in range(X.shape[1])
         ]
@@ -476,18 +474,41 @@ class PoissonSVGPR:
         )
         self.abs_Tau = tf.reduce_prod(tf.abs(self.data_maxrange - self.data_minrange))
 
+        self._len = tf.Variable(1.0, dtype=X.dtype)
+        self._beta = tf.Variable(
+            softplus_inverse(0.66 * tf.math.sqrt(tf.reduce_sum(self.Y) / self.abs_Tau)),
+            dtype=X.dtype,
+        )
+        self._sigma = tf.Variable(
+            0.5 * tf.reduce_sum(self.Y) / self.abs_Tau, dtype=X.dtype
+        )
         K_mm = self.K_mm()
         self.Sigma = tf.Variable(K_mm)
-        self.ones = self.ones_tt()
-        self.m = tf.Variable(tf.cast([1.0] * self.n_inducers, X.dtype))
+        self.m = tf.Variable(tf.cast([0] * self.n_inducers, X.dtype))
 
     @property
     def l(self):
         return tf.math.softplus(self._len)
 
+    @l.setter
+    def l(self, l):
+        self._len.assign(softplus_inverse(tf.cast(l, self._len.dtype)))
+
+    @property
+    def beta(self):
+        return tf.math.softplus(self._beta)
+
+    @beta.setter
+    def beta(self, beta):
+        self._beta.assign(softplus_inverse(tf.cast(beta, self._beta.dtype)))
+
     @property
     def sigma(self):
         return tf.math.softplus(self._sigma)
+
+    @sigma.setter
+    def sigma(self, sigma):
+        self._sigma.assign(softplus_inverse(tf.cast(sigma, self._sigma.dtype)))
 
     def kernel(self, x, y=None):
         if y is None:
@@ -525,8 +546,8 @@ class PoissonSVGPR:
                 * self.l
                 * tf.exp(-0.25 * z ** 2)
                 * (
-                    tf.math.erf(zbar - self.data_maxrange[0, i] / self.l)
-                    - tf.math.erf(zbar - self.data_minrange[0, i] / self.l)
+                    tf.math.erf(zbar - self.data_maxrange[i] / self.l)
+                    - tf.math.erf(zbar - self.data_minrange[i] / self.l)
                 )
             )
             Psis.append(Psi_i)
@@ -537,16 +558,16 @@ class PoissonSVGPR:
 
     def phi(self):
         phis = []
-        s2 = tf.sqrt(tf.constant(2, dtype=self.l.dtype))
+        s2 = tf.sqrt(tf.constant(0.5, dtype=self.l.dtype))
         for i in range(len(self.inducers_grid)):
             inducers = self.inducers[:, i]
             phi_i = (
                 tf.sqrt(tf.cast(pi, self.l.dtype))
                 * self.l
-                / s2
+                * s2
                 * (
-                    tf.math.erf((self.data_maxrange[0, i] - inducers) / (s2 * self.l))
-                    - tf.math.erf((self.data_minrange[0, i] - inducers) / (s2 * self.l))
+                    tf.math.erf((self.data_maxrange[i] - inducers) / self.l * s2)
+                    - tf.math.erf((self.data_minrange[i] - inducers) / self.l * s2)
                 )
             )
             phis.append(phi_i)
@@ -568,35 +589,20 @@ class PoissonSVGPR:
 
         K_xz = self.kernel(self.X, self.inducers)
 
-        mu2 = (
-            tf.tensordot(K_xz @ K_mm_inv, self.m, axes=[1, 0])
-            + self.u
-            * (1 - tf.tensordot(K_xz @ K_mm_inv, self.ones, axes=[1, 0]))
-        ) ** 2
+        mu2 = (tf.tensordot(K_xz @ K_mm_inv, self.m, axes=[1, 0])) ** 2
         sigma2 = (
             self.sigma
-            - tf.einsum("ij,ij->i", K_xz @ K_mm_inv, K_xz)
-            + tf.einsum("ij,ij->i", K_xz @ K_mm_inv @ S @ K_mm_inv, K_xz,)
+            - tf.einsum("ij,ij->i", K_xz @ (K_mm_inv - K_mm_inv @ S @ K_mm_inv), K_xz)
         )
 
         K_inv_m = tf.tensordot(K_mm_inv, self.m, axes=[1, 0])
-        K_inv_ones = tf.tensordot(K_mm_inv, self.ones, axes=[1, 0])
         Psi_K_inv_m = tf.tensordot(Psi, K_inv_m, axes=[1, 0])
-        Psi_K_inv_ones = tf.tensordot(Psi, K_inv_ones, axes=[1, 0])
 
-        E_f2 = (
-            tf.tensordot(K_inv_m, Psi_K_inv_m, axes=1)
-            + 2 * self.u * tf.tensordot(phi, K_inv_m, axes=1)
-            - 2 * self.u * tf.tensordot(K_inv_m, Psi_K_inv_ones, axes=1)
-            + self.u ** 2 * self.abs_Tau
-            - 2 * self.u ** 2 * tf.tensordot(phi, K_inv_ones, axes=1)
-            + self.u ** 2 * tf.tensordot(K_inv_ones, Psi_K_inv_ones, axes=1)
-        )
+        E_f2 = tf.tensordot(K_inv_m, Psi_K_inv_m, axes=1)
 
         Var_f = (
             self.sigma * self.abs_Tau
-            - tf.linalg.trace(K_mm_inv @ Psi)
-            + tf.linalg.trace(K_mm_inv @ S @ K_mm_inv @ Psi)
+            - tf.linalg.trace(K_mm_inv @ (Psi - S @ K_mm_inv @ Psi))
         )
 
         KLdiv = 0.5 * (
@@ -604,11 +610,7 @@ class PoissonSVGPR:
             + tf.linalg.logdet(K_mm)
             - tf.linalg.logdet(S)
             - self.n_inducers
-            + tf.tensordot(
-                self.u - self.m,
-                tf.tensordot(K_mm_inv, self.u - self.m, axes=[1, 0]),
-                axes=1,
-            )
+            + tf.tensordot(self.m, tf.tensordot(K_mm_inv, self.m, axes=[1, 0]), axes=1)
         )
 
         E_logf2 = tf.math.reduce_sum(
@@ -625,6 +627,8 @@ class PoissonSVGPR:
             -(
                 E_f2
                 + Var_f
+                + 2 * self.beta * tf.tensordot(phi, K_inv_m, axes=1)
+                + self.beta ** 2 * self.abs_Tau
             )
             + E_logf2
             - KLdiv
@@ -634,7 +638,7 @@ class PoissonSVGPR:
             tf.summary.scalar("elbo", elbo)
             tf.summary.scalar("lengthscale", self.l)
             tf.summary.scalar("sigma", self.sigma)
-            tf.summary.scalar("u", self.u)
+            tf.summary.scalar("beta", self.beta)
             tf.summary.scalar("E_f2", E_f2)
             tf.summary.scalar("Var_f", Var_f)
             tf.summary.scalar("KLdiv", KLdiv)
@@ -648,6 +652,7 @@ class PoissonSVGPR:
             tf.summary.histogram("sigma2", sigma2)
             tf.summary.histogram("m", self.m)
             tf.summary.histogram("Phi", phi)
+            tf.summary.histogram("Psi_h", Psi)
 
         return elbo
 
@@ -665,7 +670,7 @@ class PoissonSVGPR:
 
     def optimize(self, logdir=None):
         bfgs = gpflow.optimizers.Scipy()
-        vars = [self._len, self._sigma, self.u, self.Sigma, self.m]
+        vars = [self._len, self._sigma, self._beta, self.Sigma, self.m]
 
         trace = logdir is not None
         if trace:
@@ -694,17 +699,12 @@ class PoissonSVGPR:
         K_mm = self.K_mm()
         K_mm_inv = tf.linalg.inv(K_mm)
 
-        K_xz = self.kernel(self.X, self.inducers)
+        K_xz = self.kernel(x, self.inducers)
 
-        mu2 = (
-            tf.tensordot(K_xz @ K_mm_inv, self.m, axes=[1, 0])
-            + self.u
-            * (1 - tf.tensordot(K_xz @ K_mm_inv, self.ones, axes=[1, 0]))
-        ) ** 2
+        mu = tf.tensordot(K_xz @ K_mm_inv, self.m, axes=[1, 0])
         sigma2 = (
             self.sigma
-            - tf.einsum("ij,ij->i", K_xz @ K_mm_inv, K_xz)
-            + tf.einsum("ij,ij->i", K_xz @ K_mm_inv @ S @ K_mm_inv, K_xz,)
+            - tf.einsum("ij,ij->i", K_xz @ (K_mm_inv - K_mm_inv @ S @ K_mm_inv), K_xz)
         )
 
-        return mu2 + sigma2
+        return mu ** 2 + sigma2 + 2 * self.beta * mu + self.beta ** 2
