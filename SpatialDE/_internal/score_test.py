@@ -303,14 +303,14 @@ class NormalScoreTest(ScoreTest):
         res = minimize(
             lambda *args: self._negative_normal_loglik(*args).numpy(),
             x0=[
-                tf.math.log(tf.reduce_mean(scaledy)),
+                tf.reduce_mean(scaledy),
                 tf.zeros_like(y),
             ],
             args=(tf.cast(y, tf.float64), self.sizefactors),
             jac=lambda *args: self._grad_negative_normal_loglik(*args).numpy(),
             method="bfgs",
         )
-        mu = tf.exp(res.x[0]) * self.sizefactors
+        mu = res.x[0] * self.sizefactors
         sigma = tf.exp(res.x[1])
         return self.NullModel(mu, sigma)
 
@@ -331,7 +331,7 @@ class NormalScoreTest(ScoreTest):
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
         W = 1 / sigma**2 # Delta W^-1
         stat = 0.5 * tf.reduce_sum(
-            (rawy / mu - 1) * W * tf.tensordot(K, W * (rawy / mu - 1), axes=(-1, -1)), axis=-1
+            (rawy - mu) * W * tf.tensordot(K, W * (rawy - mu), axes=(-1, -1)), axis=-1
         )
 
         P = tf.linalg.diag(W) - W[:, tf.newaxis] * W[tf.newaxis, :] / tf.reduce_sum(W)

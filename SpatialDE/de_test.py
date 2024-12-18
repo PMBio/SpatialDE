@@ -64,8 +64,8 @@ def test(
     kernel_space: Optional[Dict[str, Union[float, List[float]]]] = None,
     sizefactors: Optional[np.ndarray] = None,
     stack_kernels: Optional[bool] = None,
+    obs_dist: Literal["NegativeBinomial", "Normal"] = "NegativeBinomial",
     use_cache: bool = True,
-    obs_dist: Literal["NegativeBinomial", "Normal"] = "NegativeBinomial"
 ) -> Tuple[pd.DataFrame, Union[pd.DataFrame, None]]:
     """
     Test for spatially variable genes.
@@ -96,6 +96,7 @@ def test(
             the kernel matrices. This leads to increased memory consumption, but will drastically improve runtime
             on GPUs for smaller data sets. Defaults to ``True`` for datasets with less than 2000 observations and
             ``False`` otherwise.
+        obs_dist: Distribution of the observations. If set as "Normal", model the regression to have Gaussian mean field error with identity link function.
         use_cache: Whether to use a pre-computed distance matrix for all kernels instead of computing the distance
             matrix anew for each kernel. Increases memory consumption, but is somewhat faster.
 
