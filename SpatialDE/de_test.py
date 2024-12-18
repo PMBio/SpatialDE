@@ -2,7 +2,7 @@ import logging
 from time import time
 import warnings
 from itertools import zip_longest
-from typing import Optional, Dict, Tuple, Union, List
+from typing import Optional, Dict, Tuple, Union, List, Literal
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ from ._internal.util import DistanceCache
 from ._internal.util import bh_adjust, calc_sizefactors, default_kernel_space, kspace_walk
 from ._internal.score_test import (
     NegativeBinomialScoreTest,
+    NormalScoreTest,
     combine_pvalues,
 )
 from ._internal.tf_dataset import AnnDataDataset
@@ -64,6 +65,7 @@ def test(
     sizefactors: Optional[np.ndarray] = None,
     stack_kernels: Optional[bool] = None,
     use_cache: bool = True,
+    obs_dist: Literal["NegativeBinomial", "Normal"] = "NegativeBinomial"
 ) -> Tuple[pd.DataFrame, Union[pd.DataFrame, None]]:
     """
     Test for spatially variable genes.
@@ -111,7 +113,7 @@ def test(
         sizefactors = calc_sizefactors(adata)
     if kernel_space is None:
         kernel_space = default_kernel_space(dcache)
-
+    test_func = NegativeBinomialScoreTest if obs_dist == "NegativeBinomial" else NormalScoreTest
     individual_results = None if omnibus else []
     if stack_kernels is None and adata.n_obs <= 2000 or stack_kernels or omnibus:
         kernels = []
@@ -119,7 +121,7 @@ def test(
         for k, name in kspace_walk(kernel_space, dcache):
             kernels.append(k)
             kernelnames.append(name)
-        test = NegativeBinomialScoreTest(
+        test = test_func(
             sizefactors,
             omnibus,
             kernels,
