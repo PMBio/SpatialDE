@@ -1,0 +1,6 @@
+SpatialDE.test
+==============
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: test

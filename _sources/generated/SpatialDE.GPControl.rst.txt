@@ -1,0 +1,6 @@
+SpatialDE.GPControl
+===================
+
+.. currentmodule:: SpatialDE
+
+.. autoclass:: GPControl

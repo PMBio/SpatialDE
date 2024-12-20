@@ -1,0 +1,6 @@
+SpatialDE.test\_spatial\_interactions
+=====================================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: test_spatial_interactions

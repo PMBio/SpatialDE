@@ -1,0 +1,6 @@
+SpatialDE.TissueSegmentation
+============================
+
+.. currentmodule:: SpatialDE
+
+.. autoclass:: TissueSegmentation

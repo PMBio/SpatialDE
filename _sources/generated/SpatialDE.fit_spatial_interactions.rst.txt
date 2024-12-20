@@ -1,0 +1,6 @@
+SpatialDE.fit\_spatial\_interactions
+====================================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: fit_spatial_interactions

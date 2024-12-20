@@ -1,0 +1,6 @@
+SpatialDE.read\_spaceranger
+===========================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: read_spaceranger

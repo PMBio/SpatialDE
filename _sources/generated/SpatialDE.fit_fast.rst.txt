@@ -1,0 +1,6 @@
+SpatialDE.fit\_fast
+===================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: fit_fast

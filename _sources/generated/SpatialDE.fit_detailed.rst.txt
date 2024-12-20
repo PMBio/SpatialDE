@@ -1,0 +1,6 @@
+SpatialDE.fit\_detailed
+=======================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: fit_detailed

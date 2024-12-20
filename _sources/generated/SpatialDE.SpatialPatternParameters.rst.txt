@@ -1,0 +1,6 @@
+SpatialDE.SpatialPatternParameters
+==================================
+
+.. currentmodule:: SpatialDE
+
+.. autoclass:: SpatialPatternParameters

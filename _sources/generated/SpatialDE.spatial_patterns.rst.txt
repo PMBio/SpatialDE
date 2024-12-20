@@ -1,0 +1,6 @@
+SpatialDE.spatial\_patterns
+===========================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: spatial_patterns

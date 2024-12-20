@@ -1,0 +1,6 @@
+SpatialDE.SGPIPM
+================
+
+.. currentmodule:: SpatialDE
+
+.. autoclass:: SGPIPM

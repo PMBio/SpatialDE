@@ -1,0 +1,6 @@
+SpatialDE.tissue\_segmentation
+==============================
+
+.. currentmodule:: SpatialDE
+
+.. autofunction:: tissue_segmentation

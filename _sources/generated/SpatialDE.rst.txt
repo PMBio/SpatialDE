@@ -1,0 +1,53 @@
+﻿SpatialDE
+=========
+
+.. automodule:: SpatialDE
+
+    
+    
+    
+
+    
+    
+    .. rubric:: Functions
+
+    .. autosummary::
+        :toctree:
+    
+        fit
+        fit_detailed
+        fit_fast
+        fit_spatial_interactions
+        read_spaceranger
+        spatial_patterns
+        test
+        test_spatial_interactions
+        tissue_segmentation
+    
+    
+
+    
+    
+    .. rubric:: Classes
+
+    .. autosummary::
+        :toctree:
+        :template: class.rst
+    
+        GP
+        GPControl
+        SGPIPM
+        SpatialPatternParameters
+        SpatialPatterns
+        TissueSegmentation
+        TissueSegmentationParameters
+        TissueSegmentationStatus
+    
+    
+
+    
+    
+    
+
+
+

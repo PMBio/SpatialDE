@@ -1,0 +1,6 @@
+SpatialDE.TissueSegmentationParameters
+======================================
+
+.. currentmodule:: SpatialDE
+
+.. autoclass:: TissueSegmentationParameters

@@ -1,0 +1,6 @@
+SpatialDE.GP
+============
+
+.. currentmodule:: SpatialDE
+
+.. autoclass:: GP
