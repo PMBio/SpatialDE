@@ -279,10 +279,10 @@ class NormalScoreTest(ScoreTest):
     @dataclass
     class NullModel(ScoreTest.NullModel):
         mu: tf.Tensor
-        sigma: tf.Tensor
+        sigmasq: tf.Tensor
 
     def _fit_null(self, y: tf.Tensor) -> NullModel:
-        return self.NullModel(tf.reduce_mean(y), tf.reduce_std(y))
+        return self.NullModel(tf.reduce_mean(y), tf.reduce_variance(y))
 
     def _test(
         self, y: tf.Tensor, nullmodel: NullModel
@@ -290,16 +290,16 @@ class NormalScoreTest(ScoreTest):
         return self._do_test(
             self._K,
             to_default_float(y),
-            to_default_float(nullmodel.sigma),
+            to_default_float(nullmodel.sigmasq),
             to_default_float(nullmodel.mu),
         )
 
     @staticmethod
     @tf.function(experimental_compile=True)
     def _do_test(
-        K: tf.Tensor, rawy: tf.Tensor, sigma: tf.Tensor, mu: tf.Tensor
+        K: tf.Tensor, rawy: tf.Tensor, sigmasq: tf.Tensor, mu: tf.Tensor
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
-        W = 1 / sigma**2  # W^-1
+        W = 1 / sigmasq  # W^-1
         stat = 0.5 * tf.reduce_sum(
             (rawy - mu) * W * tf.tensordot(K, W * (rawy - mu), axes=(-1, -1)), axis=-1
         )
