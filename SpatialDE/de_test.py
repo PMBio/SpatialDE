@@ -127,10 +127,8 @@ def test(
                 omnibus,
                 kernels,
             )
-        else: 
-            test = NormalScoreTest(
-                omnibus, kernels
-            )
+        else:
+            test = NormalScoreTest(omnibus, kernels)
 
         results = []
         with tqdm(total=adata.n_vars) as pbar:

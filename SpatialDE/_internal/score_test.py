@@ -299,7 +299,7 @@ class NormalScoreTest(ScoreTest):
     def _do_test(
         K: tf.Tensor, rawy: tf.Tensor, sigma: tf.Tensor, mu: tf.Tensor
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
-        W = 1 / sigma**2 # W^-1
+        W = 1 / sigma**2  # W^-1
         stat = 0.5 * tf.reduce_sum(
             (rawy - mu) * W * tf.tensordot(K, W * (rawy - mu), axes=(-1, -1)), axis=-1
         )
