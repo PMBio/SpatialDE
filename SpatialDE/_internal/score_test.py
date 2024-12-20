@@ -281,38 +281,8 @@ class NormalScoreTest(ScoreTest):
         mu: tf.Tensor
         sigma: tf.Tensor
 
-    def __init__(
-        self,
-        sizefactors: tf.Tensor,
-        omnibus: bool = False,
-        kernel: Optional[Union[Kernel, List[Kernel]]] = None,
-    ):
-        self.sizefactors = tf.squeeze(tf.cast(sizefactors, tf.float64))
-        if tf.rank(self.sizefactors) > 1:
-            raise ValueError("Size factors vector must have rank 1")
-
-        yidx = tf.cast(tf.squeeze(tf.where(self.sizefactors > 0)), tf.int32)
-        if tf.shape(yidx)[0] != tf.shape(self.sizefactors)[0]:
-            self.sizefactors = tf.gather(self.sizefactors, yidx)
-        else:
-            yidx = None
-        super().__init__(omnibus, kernel, yidx)
-
     def _fit_null(self, y: tf.Tensor) -> NullModel:
-        scaledy = tf.cast(y, tf.float64) / self.sizefactors
-        res = minimize(
-            lambda *args: self._negative_normal_loglik(*args).numpy(),
-            x0=[
-                tf.reduce_mean(scaledy),
-                tf.zeros_like(y),
-            ],
-            args=(tf.cast(y, tf.float64), self.sizefactors),
-            jac=lambda *args: self._grad_negative_normal_loglik(*args).numpy(),
-            method="bfgs",
-        )
-        mu = res.x[0] * self.sizefactors
-        sigma = tf.exp(res.x[1])
-        return self.NullModel(mu, sigma)
+        return self.NullModel(tf.reduce_mean(y), tf.reduce_std(y))
 
     def _test(
         self, y: tf.Tensor, nullmodel: NullModel
@@ -329,7 +299,7 @@ class NormalScoreTest(ScoreTest):
     def _do_test(
         K: tf.Tensor, rawy: tf.Tensor, sigma: tf.Tensor, mu: tf.Tensor
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
-        W = 1 / sigma**2 # Delta W^-1
+        W = 1 / sigma**2 # W^-1
         stat = 0.5 * tf.reduce_sum(
             (rawy - mu) * W * tf.tensordot(K, W * (rawy - mu), axes=(-1, -1)), axis=-1
         )
@@ -344,31 +314,3 @@ class NormalScoreTest(ScoreTest):
         I_tau_tau_tilde = I_tau_tau - tf.square(I_tau_theta) / I_theta_theta
 
         return stat, e_tilde, I_tau_tau_tilde
-
-    @staticmethod
-    @tf.function(experimental_compile=True)
-    def _negative_normal_loglik(params, observations, sizefactors=None):
-        mu = params[0]
-        mus = mu * sizefactors
-        log_sigma = params[1]
-        sigma = tf.exp(log_sigma)
-        
-        return tf.reduce_sum(
-            0.5 * tf.math.log(2 * np.pi) +  # Constant term
-            log_sigma +  # Log of standard deviation
-            0.5 * ((observations - mus) / sigma) ** 2  # Squared standardized residuals
-        )
-
-    @staticmethod
-    @tf.function(experimental_compile=True)
-    def _grad_negative_normal_loglik(params, observations, sizefactors):
-        mu = params[0]
-        logsigma = params[1]
-        mus = mu * sizefactors
-        sigma = tf.exp(logsigma)
-        
-        grad0 = tf.reduce_sum((observations - mus) / sigma**2)  # d/d_mu
-        grad1 = tf.reduce_sum(
-            1 - ((observations - mu) / sigma)**2
-        )  # d/d_logsigma
-        return -tf.convert_to_tensor((grad0, grad1))

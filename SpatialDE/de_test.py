@@ -114,7 +114,6 @@ def test(
         sizefactors = calc_sizefactors(adata)
     if kernel_space is None:
         kernel_space = default_kernel_space(dcache)
-    test_func = NegativeBinomialScoreTest if obs_dist == "NegativeBinomial" else NormalScoreTest
     individual_results = None if omnibus else []
     if stack_kernels is None and adata.n_obs <= 2000 or stack_kernels or omnibus:
         kernels = []
@@ -122,11 +121,16 @@ def test(
         for k, name in kspace_walk(kernel_space, dcache):
             kernels.append(k)
             kernelnames.append(name)
-        test = test_func(
-            sizefactors,
-            omnibus,
-            kernels,
-        )
+        if obs_dist == "NegativeBinomial":
+            test = NegativeBinomialScoreTest(
+                sizefactors,
+                omnibus,
+                kernels,
+            )
+        else: 
+            test = NormalScoreTest(
+                omnibus, kernels
+            )
 
         results = []
         with tqdm(total=adata.n_vars) as pbar:
