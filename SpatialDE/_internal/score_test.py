@@ -273,3 +273,44 @@ class NegativeBinomialScoreTest(ScoreTest):
             + (counts - mus) / one_alpha_mu
         )  # d/d_alpha
         return -tf.convert_to_tensor((grad0, grad1))
+
+
+class NormalScoreTest(ScoreTest):
+    @dataclass
+    class NullModel(ScoreTest.NullModel):
+        mu: tf.Tensor
+        sigmasq: tf.Tensor
+
+    def _fit_null(self, y: tf.Tensor) -> NullModel:
+        return self.NullModel(tf.reduce_mean(y), tf.reduce_variance(y))
+
+    def _test(
+        self, y: tf.Tensor, nullmodel: NullModel
+    ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
+        return self._do_test(
+            self._K,
+            to_default_float(y),
+            to_default_float(nullmodel.sigmasq),
+            to_default_float(nullmodel.mu),
+        )
+
+    @staticmethod
+    @tf.function(experimental_compile=True)
+    def _do_test(
+        K: tf.Tensor, rawy: tf.Tensor, sigmasq: tf.Tensor, mu: tf.Tensor
+    ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor]:
+        W = 1 / sigmasq  # W^-1
+        stat = 0.5 * tf.reduce_sum(
+            (rawy - mu) * W * tf.tensordot(K, W * (rawy - mu), axes=(-1, -1)), axis=-1
+        )
+
+        P = tf.linalg.diag(W) - W[:, tf.newaxis] * W[tf.newaxis, :] / tf.reduce_sum(W)
+        PK = W[:, tf.newaxis] * K - W[:, tf.newaxis] * ((W[tf.newaxis, :] @ K) / tf.reduce_sum(W))
+        trace_PK = tf.linalg.trace(PK)
+        e_tilde = 0.5 * trace_PK
+        I_tau_tau = 0.5 * tf.reduce_sum(PK * PK, axis=(-2, -1))
+        I_tau_theta = 0.5 * tf.reduce_sum(PK * P, axis=(-2, -1))
+        I_theta_theta = 0.5 * tf.reduce_sum(tf.square(P), axis=(-2, -1))
+        I_tau_tau_tilde = I_tau_tau - tf.square(I_tau_theta) / I_theta_theta
+
+        return stat, e_tilde, I_tau_tau_tilde

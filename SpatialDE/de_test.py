@@ -2,7 +2,7 @@ import logging
 from time import time
 import warnings
 from itertools import zip_longest
-from typing import Optional, Dict, Tuple, Union, List
+from typing import Optional, Dict, Tuple, Union, List, Literal
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ from ._internal.util import DistanceCache
 from ._internal.util import bh_adjust, calc_sizefactors, default_kernel_space, kspace_walk
 from ._internal.score_test import (
     NegativeBinomialScoreTest,
+    NormalScoreTest,
     combine_pvalues,
 )
 from ._internal.tf_dataset import AnnDataDataset
@@ -63,6 +64,7 @@ def test(
     kernel_space: Optional[Dict[str, Union[float, List[float]]]] = None,
     sizefactors: Optional[np.ndarray] = None,
     stack_kernels: Optional[bool] = None,
+    obs_dist: Literal["NegativeBinomial", "Normal"] = "NegativeBinomial",
     use_cache: bool = True,
 ) -> Tuple[pd.DataFrame, Union[pd.DataFrame, None]]:
     """
@@ -94,6 +96,7 @@ def test(
             the kernel matrices. This leads to increased memory consumption, but will drastically improve runtime
             on GPUs for smaller data sets. Defaults to ``True`` for datasets with less than 2000 observations and
             ``False`` otherwise.
+        obs_dist: Distribution of the observations. If set as "Normal", model the regression to have Gaussian mean field error with identity link function.
         use_cache: Whether to use a pre-computed distance matrix for all kernels instead of computing the distance
             matrix anew for each kernel. Increases memory consumption, but is somewhat faster.
 
@@ -111,7 +114,6 @@ def test(
         sizefactors = calc_sizefactors(adata)
     if kernel_space is None:
         kernel_space = default_kernel_space(dcache)
-
     individual_results = None if omnibus else []
     if stack_kernels is None and adata.n_obs <= 2000 or stack_kernels or omnibus:
         kernels = []
@@ -119,11 +121,14 @@ def test(
         for k, name in kspace_walk(kernel_space, dcache):
             kernels.append(k)
             kernelnames.append(name)
-        test = NegativeBinomialScoreTest(
-            sizefactors,
-            omnibus,
-            kernels,
-        )
+        if obs_dist == "NegativeBinomial":
+            test = NegativeBinomialScoreTest(
+                sizefactors,
+                omnibus,
+                kernels,
+            )
+        else:
+            test = NormalScoreTest(omnibus, kernels)
 
         results = []
         with tqdm(total=adata.n_vars) as pbar:
